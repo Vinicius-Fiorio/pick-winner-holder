@@ -1,12 +1,73 @@
 import confetti from 'https://cdn.skypack.dev/canvas-confetti';
 
-function pickWinner(addresses, entries){
+let quantityHolders = 0;
+let addresses = [];
+let entries = [];
 
+let winnerText = document.querySelector(".winner");
+let amountText = document.querySelector(".amount-winner");
+let botao = document.querySelector(".button-raffle");
+let participantes = document.querySelector(".participantes");
+let listRaffle = document.querySelector(".list-raffle");
+
+(async () => {
+  console.time("Duracao:")
+  const url = "https://utils0.blob.core.windows.net/mega-dao/WhaleHolders.xlsx";
+  const data = await (await fetch(url)).arrayBuffer();
+
+  const workbook = XLSX.read(data);
+  const xlsxData = workbook["Sheets"]["Sheet1"]
+
+  delete xlsxData["!margins"]
+  delete xlsxData["!ref"]
+
+  quantityHolders = Object.keys(xlsxData).length/2;
+
+  let auxElementHTML = "";
+
+  for (let index = 1; index <= quantityHolders; index++) {
+    let keyAdress = "A";
+    let keyAmount = "B";
+
+    let address = String(xlsxData[`${keyAdress}${index}`]["v"]);
+    let amount = xlsxData[`${keyAmount}${index}`]["v"];
+
+    addresses.push(address);
+    entries.push(amount);
+
+    let addressFormatted = address.slice(0,7) + "..." + address.slice(-4);
+
+    auxElementHTML += `
+    <div class="row ${address}">
+      <div class="col">
+        <p>${addressFormatted}</p>
+      </div>
+      <div class="col">
+        <p>${amount}</p>
+      </div>
+    </div>
+
+    `
+  }
+
+  listRaffle.innerHTML = auxElementHTML;
+  participantes.innerHTML = `Participantes: ${quantityHolders}`;
+  console.timeEnd("Duracao:")
+})();
+
+function setWinner(winnerAddress, type){
+  let winnerList = document.querySelector(`[class="row ${winnerAddress}"]`);
+  winnerList.style.backgroundColor = type == "win" ? "#161e8a" : "#ffffff";
+  winnerList.style.color = type == "win" ? "#ffffff" : "#212529";
+}
+
+function pickWinner(addresses, entries){
   let sum = entries.reduce((previousValue, currentValue) => previousValue + currentValue, 0)
   const roll = Math.random() * sum;
 
   for (let index = 0; index < addresses.length; index++) {
     sum -= entries[index];
+    
     if(roll >= sum){
       const winner = addresses[index];
       const amount = entries[index];
@@ -15,61 +76,6 @@ function pickWinner(addresses, entries){
   }
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-async function getStatusHolders(){
-  const network_id = '1'; 
-  const token_addr = '0x993cc015a4940d11ef02eb986532da108b67c428'; 
-  const CHAINBASE_API_KEY = "demo";
-
-  let page = 1;
-  let quantityHolders;
-  let addresses = [];
-  let entries = [];
-
-  while(page != null){
-    const response = await fetch(`https://api.chainbase.online/v1/token/top-holders?chain_id=${network_id}&contract_address=${token_addr}&page=${page}&limit=100`, {
-      method: 'GET',
-      headers: {
-          'x-api-key': CHAINBASE_API_KEY,
-          'accept': 'application/json'
-      }
-    });
-
-    const data = await response.json();
-
-    if(data.data){
-      if(page == 1){
-        quantityHolders = data.count;
-      }
-  
-      page = data.next_page || null
-  
-      data.data.forEach(user => {
-        addresses.push(user.wallet_address)
-        entries.push(Math.trunc(parseFloat(user.amount)))
-      })
-    }else{
-      console.log("Não respondeu corretamente: ", page)
-      await sleep(200);
-    }
-
-    await sleep(900);
-  }
-
-  return { addresses, entries, quantityHolders }
-}
-
-let winnerText = document.querySelector(".winner");
-let amountText = document.querySelector(".amount-winner");
-let botao = document.querySelector(".raffle");
-let participantes = document.querySelector(".participantes");
-let loading = document.querySelector(".wrapper");
-
 let confetes;
 
 async function congratulations(){
@@ -77,7 +83,7 @@ async function congratulations(){
 
   confetes = setInterval(() => {
     confetti();
-  }, Math.floor(Math.random() * 1000));
+  }, Math.floor(Math.random() * (1200 - 300)) + 300);
 
   setTimeout(() => {
     clearInterval(confetes);
@@ -86,13 +92,16 @@ async function congratulations(){
 
 
 async function startRaffle(){
+  clearInterval(confetes);
+  if(winnerText.innerText != "" || winnerText.innerHTML != "winner")
+    setWinner(winnerText.innerText, "reset")
 
   try {
-    const { addresses, entries, quantityHolders } = await getStatusHolders();
     const { winner, amount} = pickWinner(addresses, entries);
 
+    setWinner(winner, "win")
+
     congratulations();
-    loading.style.display = "none";
 
     winnerText.innerHTML = `${winner}`;
     winnerText.style.fontSize = "3vw";
@@ -111,6 +120,5 @@ async function startRaffle(){
 }
 
 botao.addEventListener('click', async () =>{
-  loading.style.display = "block";
   await startRaffle();
 })
